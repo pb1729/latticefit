@@ -28,36 +28,74 @@ def lattice_fit(X:np.ndarray, zeta:float, resolution:int=1000, δ:float=0.9, pri
     # convert back to floats in original scale
     return ans/(resolution*zeta)
 
+def lattice_match(v, X, zeta:float, resolution:int=1000, δ:float=0.9):
+  """ get the decomposition of vector v in terms of the lattice basis X
+      v: (dim)    [m]
+      X: (N, dim) [m]
+      zeta: [1/m] -- smaller value than you used to find the lattice in the first place is helpful here """
+  N, dim = X.shape
+  A = np.zeros((N + 1, N + 1 + dim), dtype=int)
+  for i in range(N):
+    A[i, i] = resolution
+    A[i, N + 1:] = np.rint(resolution*zeta*X[i])
+  A[N, N] = resolution
+  A[N, N + 1:] = np.rint(resolution*zeta*v)
+  # do the computation, freezing up to N (the original basis) to save on computation
+  ans = lll(A, δ=δ, freeze=N)
+  x = ans[-1]
+  if x[N] > 0:
+    x = -x
+  coeffs = x[:N]//resolution
+  err = ((x[N + 1:]/(resolution*zeta))**2).sum()
+  return coeffs, err
+
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    print("DEMO 1: fit to 2d lattice")
-    print("Grey points show the true underlying lattice. Blue is the slightly noisy data.\nGreen is the origin, yellow are the fitted basis vectors.")
-    N = 8
-    BG = np.random.randint(-4, 5, size=(1000, 2)) @ np.array([[2., -1.], [1., 1.]])
-    plt.scatter(BG[:, 0], BG[:, 1], color="grey")
-    X = np.random.randint(-2, 3, size=(N, 2)) @ np.array([[2., -1.], [1., 1.]]) + 0.01*np.random.randn(N, 2)
-    plt.scatter(X[:, 0], X[:, 1])
-    # now do main testing:
-    ans = lattice_fit(X, 4.0)
-    plt.scatter(ans[:2, 0], ans[:2, 1])
-    plt.scatter([0], [0])
-    plt.show()
+    if False:
+      print("DEMO 1: fit to 2d lattice")
+      print("Grey points show the true underlying lattice. Blue is the slightly noisy data.\nGreen is the origin, yellow are the fitted basis vectors.")
+      N = 8
+      BG = np.random.randint(-4, 5, size=(1000, 2)) @ np.array([[2., -1.], [1., 1.]])
+      plt.scatter(BG[:, 0], BG[:, 1], color="grey")
+      X = np.random.randint(-2, 3, size=(N, 2)) @ np.array([[2., -1.], [1., 1.]]) + 0.01*np.random.randn(N, 2)
+      plt.scatter(X[:, 0], X[:, 1])
+      # now do main testing:
+      ans = lattice_fit(X, 4.0)
+      plt.scatter(ans[:2, 0], ans[:2, 1])
+      plt.scatter([0], [0])
+      plt.show()
+      input("PRESS ENTER TO CONTINUE")
     # try with a bigger lattice:
     print("\n\nDEMO 2: fit to a high-dimensional lattice")
     N = 50
-    dim = 60
+    dim = 260
     basis_sz = 16
     basis = np.random.randn(basis_sz, dim)
     X = np.random.randint(-1, 2, size=(N, basis_sz)) @ basis + 0.01*np.random.randn(N, dim)
     print("fitting progress (out of %d)" % N)
     ans = lattice_fit(X, 10.0, print_progress=True)
-    print("displaying plot, make a note of the index where the magnitude drops to 0")
-    plt.bar(np.arange(ans.shape[0]), (ans**2).sum(-1))
-    plt.xlabel("lattice vector index")
-    plt.ylabel("lattice vector magnitude")
-    plt.show()
-    i_end = int(input("At what index does the magnitude drop to 0? >"))
+    if False:
+      print("displaying plot, make a note of the index where the magnitude drops to 0")
+      plt.bar(np.arange(ans.shape[0]), (ans**2).sum(-1))
+      plt.xlabel("lattice vector index")
+      plt.ylabel("lattice vector magnitude")
+      plt.show()
+      i_end = int(input("At what index does the magnitude drop to 0? >"))
+    else:
+      i_end = basis_sz
     print("Basis vectors from fitting:")
     print(ans[:i_end])
+    input("PRESS ENTER TO CONTINUE")
+    print("\n\nDEMO 3: map a vector onto the lattice from the previous part")
+    basis = basis[np.argsort((-basis[:, N + 1:]**2).sum(-1))] # sort basis by length so it hopefully roughly matches up with X in terms of vector order
+    coeffs = np.random.randint(-1, 2, size=(1, basis_sz))
+    v = coeffs @ basis + 0.01*np.random.randn(1, dim)
+    v = v.reshape(dim)
+    coeffs_hat, err = lattice_match(v, basis, 1.)
+    print("err:", err)
+    print("true:", coeffs[0])
+    print("pred:", coeffs_hat)
+
+
 
